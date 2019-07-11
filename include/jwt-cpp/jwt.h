@@ -17,6 +17,10 @@
 #define OPENSSL10
 #endif
 
+#include <botan/hex.h>
+#include <botan/hash.h>
+#include <botan/hmac.h>
+
 #ifndef JWT_CLAIM_EXPLICIT
 #define JWT_CLAIM_EXPLICIT 0
 #endif
@@ -155,9 +159,15 @@ namespace jwt {
 			 * \param md Pointer to hash function
 			 * \param name Name of the algorithm
 			 */
-			hmacsha(std::string key, const EVP_MD*(*md)(), const std::string& name)
-				: secret(std::move(key)), md(md), alg_name(name)
-			{}
+                        hmacsha(std::string key, const std::string& hash_name, const std::string& name)
+                                : alg_name(name), hash_(Botan::HashFunction::create(hash_name)), hmac_(new Botan::HMAC(hash_.get()))
+                        {
+                            hmac_->set_key(reinterpret_cast<const uint8_t*>(key.c_str()), key.size());
+                        }
+                        hmacsha(hmacsha&&) = default;
+                        hmacsha& operator=(hmacsha&&) = default;
+                        hmacsha(const hmacsha&) = delete;
+                        hmacsha& operator=(const hmacsha&) = delete;
 			/**
 			 * Sign jwt data
 			 * \param data The data to sign
@@ -165,12 +175,11 @@ namespace jwt {
 			 * \throws signature_generation_exception
 			 */
 			std::string sign(const std::string& data) const {
-				std::string res;
-				res.resize(EVP_MAX_MD_SIZE);
-				unsigned int len = res.size();
-				if (HMAC(md(), secret.data(), secret.size(), (const unsigned char*)data.data(), data.size(), (unsigned char*)res.data(), &len) == nullptr)
-					throw signature_generation_exception();
-				res.resize(len);
+//                                hmac_->clear();
+                                hmac_->update(data);
+                                std::string res;
+                                res.resize(hmac_->output_length());
+                                hmac_->final(reinterpret_cast<uint8_t*>(res.data()));
 				return res;
 			}
 			/**
@@ -202,13 +211,12 @@ namespace jwt {
 			std::string name() const {
 				return alg_name;
 			}
-		private:
-			/// HMAC secrect
-			const std::string secret;
-			/// HMAC hash generator
-			const EVP_MD*(*md)();
+                private:
 			/// Algorithmname
 			const std::string alg_name;
+
+                        std::unique_ptr<Botan::HashFunction> hash_;
+                        std::unique_ptr<Botan::HMAC> hmac_;
 		};
 		/**
 		 * Base class for RSA family of algorithms
@@ -579,8 +587,9 @@ namespace jwt {
 			 * \param key HMAC signing key
 			 */
 			explicit hs256(std::string key)
-				: hmacsha(std::move(key), EVP_sha256, "HS256")
+                                : hmacsha(std::move(key), "SHA-256", "HS256")
 			{}
+                    hs256(hs256&&) = default;
 		};
 		/**
 		 * HS384 algorithm
@@ -591,7 +600,7 @@ namespace jwt {
 			 * \param key HMAC signing key
 			 */
 			explicit hs384(std::string key)
-				: hmacsha(std::move(key), EVP_sha384, "HS384")
+                                : hmacsha(std::move(key), "SHA-384", "HS384")
 			{}
 		};
 		/**
@@ -603,7 +612,7 @@ namespace jwt {
 			 * \param key HMAC signing key
 			 */
 			explicit hs512(std::string key)
-				: hmacsha(std::move(key), EVP_sha512, "HS512")
+                                : hmacsha(std::move(key), "SHA-512", "HS512")
 			{}
 		};
 		/**
@@ -1359,7 +1368,7 @@ namespace jwt {
 		template<typename T>
 		struct algo : public algo_base {
 			T alg;
-			explicit algo(T a) : alg(a) {}
+                        explicit algo(T a) : alg(std::move(a)) {}
 			virtual void verify(const std::string& data, const std::string& sig) override {
 				alg.verify(data, sig);
 			}
@@ -1450,7 +1459,9 @@ namespace jwt {
 		 */
 		template<typename Algorithm>
 		verifier& allow_algorithm(Algorithm alg) {
-			algs[alg.name()] = std::make_shared<algo<Algorithm>>(alg);
+                    std::string alg_name = alg.name();
+                    auto alg_ptr = std::make_shared<algo<Algorithm>>(std::move(alg));
+                    algs.emplace(std::move(alg_name), std::move(alg_ptr));
 			return *this;
 		}
 

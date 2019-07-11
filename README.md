@@ -1,5 +1,8 @@
 # jwt-cpp
 
+Merge for *Botan* library support.
+Now supported only *HS256*.
+
 [![Codacy Badge](https://api.codacy.com/project/badge/Grade/5f7055e294744901991fd0a1620b231d)](https://app.codacy.com/app/Thalhammer/jwt-cpp?utm_source=github.com&utm_medium=referral&utm_content=Thalhammer/jwt-cpp&utm_campaign=Badge_Grade_Settings)
 
 A header only library for creating and validating json web tokens in c++.
