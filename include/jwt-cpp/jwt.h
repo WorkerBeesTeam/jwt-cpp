@@ -160,7 +160,7 @@ namespace jwt {
 			 * \param name Name of the algorithm
 			 */
                         hmacsha(std::string key, const std::string& hash_name, const std::string& name)
-                                : alg_name(name), hash_(Botan::HashFunction::create(hash_name)), hmac_(new Botan::HMAC(hash_.get()))
+                                : alg_name(name), hmac_(new Botan::HMAC(Botan::HashFunction::create(hash_name).release()))
                         {
                             hmac_->set_key(reinterpret_cast<const uint8_t*>(key.c_str()), key.size());
                         }
@@ -215,7 +215,6 @@ namespace jwt {
 			/// Algorithmname
 			const std::string alg_name;
 
-                        std::unique_ptr<Botan::HashFunction> hash_;
                         std::unique_ptr<Botan::HMAC> hmac_;
 		};
 		/**
