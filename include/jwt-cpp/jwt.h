@@ -160,9 +160,8 @@ namespace jwt {
 			 * \param name Name of the algorithm
 			 */
                         hmacsha(std::string key, const std::string& hash_name, const std::string& name)
-                                : alg_name(name), hmac_(new Botan::HMAC(Botan::HashFunction::create(hash_name).release()))
+                                : alg_name(name), key_(key), hmac_(new Botan::HMAC(Botan::HashFunction::create(hash_name).release()))
                         {
-                            hmac_->set_key(reinterpret_cast<const uint8_t*>(key.c_str()), key.size());
                         }
                         hmacsha(hmacsha&&) = default;
                         hmacsha& operator=(hmacsha&&) = default;
@@ -175,11 +174,18 @@ namespace jwt {
 			 * \throws signature_generation_exception
 			 */
 			std::string sign(const std::string& data) const {
-//                                hmac_->clear();
-                                hmac_->update(data);
+                                thread_local std::unique_ptr<Botan::HMAC> hmac;
+                                if (!hmac)
+                                {
+                                    hmac.reset(static_cast<Botan::HMAC*>(hmac_->clone()));
+                                    hmac->set_key(reinterpret_cast<const uint8_t*>(key_.c_str()), key_.size());
+//                                    std::cout << "HMAC init for thread: " << std::this_thread::get_id() << std::endl;
+                                }
+
+                                hmac->update(data);
                                 std::string res;
-                                res.resize(hmac_->output_length());
-                                hmac_->final(reinterpret_cast<uint8_t*>(res.data()));
+                                res.resize(hmac->output_length());
+                                hmac->final(reinterpret_cast<uint8_t*>(res.data()));
 				return res;
 			}
 			/**
@@ -214,6 +220,7 @@ namespace jwt {
                 private:
 			/// Algorithmname
 			const std::string alg_name;
+                        const std::string key_;
 
                         std::unique_ptr<Botan::HMAC> hmac_;
 		};
