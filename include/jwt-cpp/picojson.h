@@ -76,8 +76,14 @@ extern "C" {
 // experimental support for int64_t (see README.mkdn for detail)
 #ifdef PICOJSON_USE_INT64
 #define __STDC_FORMAT_MACROS
-#include <errno.h>
+#include <cerrno>
+#if __cplusplus >= 201103L
+#include <cinttypes>
+#else
+extern "C" {
 #include <inttypes.h>
+}
+#endif
 #endif
 
 // to disable the use of localeconv(3), set PICOJSON_USE_LOCALE to 0
@@ -408,9 +414,14 @@ SET(int64_t, int64, u_.int64_ = _val;)
     type_ = jtype##_type;                                                                                                          \
     setter                                                                                                                         \
   }
+MOVESET(bool, boolean, u_.boolean_ = std::move(_val);)
 MOVESET(std::string, string, u_.string_ = new std::string(std::move(_val));)
 MOVESET(array, array, u_.array_ = new array(std::move(_val));)
 MOVESET(object, object, u_.object_ = new object(std::move(_val));)
+MOVESET(double, number, u_.number_ = std::move(_val);)
+#ifdef PICOJSON_USE_INT64
+MOVESET(int64_t, int64, u_.int64_ = std::move(_val);)
+#endif
 #undef MOVESET
 #endif
 
